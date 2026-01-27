@@ -1,40 +1,32 @@
 import sys
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
-    QVBoxLayout, QGridLayout, QPushButton, QLineEdit,
-    QListWidget, QHBoxLayout
+    QVBoxLayout, QGridLayout, QPushButton,
+    QLineEdit, QListWidget, QHBoxLayout
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QRect
+from PySide6.QtGui import QFont, QIcon
 from logic.engine import SafeCalculator
-from PySide6.QtCore import QPropertyAnimation, QEasingCurve, QRect
-from PySide6.QtGui import QIcon
 
 
 class Calculator(QMainWindow):
     FUNCTION_TOKENS = [
-        "sin(",
-        "cos(",
-        "tan(",
-        "log(",
-        "sqrt(",
-        "pi",
-        "Error"
+        "sin(", "cos(", "tan(", "log(",
+        "sqrt(", "pi", "Error"
     ]
 
     def __init__(self):
         super().__init__()
+
         self.setWindowTitle("Calculator")
         self.setFixedSize(560, 580)
         self.setWindowIcon(QIcon("calc_icon.ico"))
-
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.setFocusPolicy(Qt.StrongFocus)
         self.central_widget.setFocusPolicy(Qt.StrongFocus)
         self.central_widget.setFocus()
-
 
         self.root_layout = QHBoxLayout(self.central_widget)
         self.left_layout = QVBoxLayout()
@@ -50,9 +42,9 @@ class Calculator(QMainWindow):
         self.apply_style()
         self.engine = SafeCalculator()
 
+    # ------------------- Animations -------------------
     def animate_button(self, button):
         original_rect = button.geometry()
-
         shrink_rect = QRect(
             original_rect.x() + 3,
             original_rect.y() + 3,
@@ -66,12 +58,12 @@ class Calculator(QMainWindow):
         animation.setStartValue(original_rect)
         animation.setKeyValueAt(0.5, shrink_rect)
         animation.setEndValue(original_rect)
-
         animation.start()
 
         # Prevent garbage collection
         button._animation = animation
 
+    # ------------------- Display -------------------
     def create_display(self):
         self.display = QLineEdit()
         self.display.setReadOnly(True)
@@ -84,6 +76,7 @@ class Calculator(QMainWindow):
         self.display.setFocusPolicy(Qt.NoFocus)
         self.left_layout.addWidget(self.display)
 
+    # ------------------- Buttons -------------------
     def create_buttons(self):
         self.grid = QGridLayout()
         self.grid.setSpacing(10)
@@ -104,7 +97,6 @@ class Calculator(QMainWindow):
             (".", 5, 0), ("0", 5, 1), ("√", 5, 2), ("=", 5, 3)
         ]
 
-
         for btn in buttons:
             if len(btn) == 3:
                 text, row, col = btn
@@ -124,7 +116,8 @@ class Calculator(QMainWindow):
             self.grid.addWidget(button, row, col, rowspan, colspan)
 
         self.left_layout.addLayout(self.grid)
-    
+
+    # ------------------- Input Handling -------------------
     def append_text(self, text):
         current = self.display.text()
         last = current[-1] if current else ""
@@ -133,18 +126,16 @@ class Calculator(QMainWindow):
         if current == "Error":
             current = ""
 
-        # Replace starting 0 (also for functions)
+        # Replace starting 0
         if current == "0" and text not in (".", ")"):
             current = ""
 
         # Prevent double operators
         if self.is_operator(text):
-            if not current:
-                return
-            if self.is_operator(last) or last == "(":
+            if not current or self.is_operator(last) or last == "(":
                 return
 
-        # Prevent multiple dots in same number
+        # Prevent multiple dots in the same number
         if text == ".":
             num = ""
             for ch in reversed(current):
@@ -155,71 +146,57 @@ class Calculator(QMainWindow):
             if "." in num:
                 return
 
-        # Prevent empty ()
+        # Prevent empty brackets ()
         if text == ")" and last == "(":
             return
 
-        # Prevent unmatched )
+        # Prevent unmatched closing bracket
         if text == ")" and self.bracket_balance() <= 0:
             return
 
-        # Allow number/function after (
+        # Prevent opening bracket after number without operator
         if text == "(" and last.isdigit():
             return
 
         self.display.setText(current + text)
 
-
     def is_operator(self, ch):
         return ch in "+-*/"
+
     def bracket_balance(self):
         text = self.display.text()
         return text.count("(") - text.count(")")
 
-
+    # ------------------- Keyboard Events -------------------
     def keyPressEvent(self, event):
         key = event.key()
 
         if Qt.Key_0 <= key <= Qt.Key_9:
             self.on_button_click(chr(key))
-
         elif key == Qt.Key_Plus:
             self.on_button_click("+")
-
         elif key == Qt.Key_Minus:
             self.on_button_click("-")
-
         elif key == Qt.Key_Asterisk:
             self.on_button_click("*")
-
         elif key == Qt.Key_Slash:
             self.on_button_click("/")
-
         elif key == Qt.Key_Enter or key == Qt.Key_Return:
             self.on_button_click("=")
-
         elif key == Qt.Key_Backspace:
             self.on_button_click("⌫")
-
-        elif key == Qt.Key_Escape:
+        elif key == Qt.Key_Escape or key == Qt.Key_Delete:
             self.on_button_click("C")
-
-        elif key == Qt.Key_Delete:
-            self.on_button_click("C")
-
         elif key == Qt.Key_Period:
             self.on_button_click(".")
-
         elif key == Qt.Key_ParenLeft:
             self.on_button_click("(")
-
         elif key == Qt.Key_ParenRight:
             self.on_button_click(")")
-
         else:
             super().keyPressEvent(event)
 
-
+    # ------------------- Button Actions -------------------
     def on_button_click(self, text):
         if text == "C":
             self.display.setText("0")
@@ -248,6 +225,7 @@ class Calculator(QMainWindow):
         else:
             self.append_text(text)
 
+    # ------------------- Backspace -------------------
     def smart_backspace(self):
         current = self.display.text()
 
@@ -264,7 +242,7 @@ class Calculator(QMainWindow):
         new_text = current[:-1]
         self.display.setText(new_text if new_text else "0")
 
-
+    # ------------------- History -------------------
     def create_history(self):
         self.history = QListWidget()
         self.history.setFixedWidth(170)
@@ -275,38 +253,38 @@ class Calculator(QMainWindow):
         expression = item.text().split("=")[0].strip()
         self.display.setText(expression)
 
-
+    # ------------------- Styling -------------------
     def apply_style(self):
         self.setStyleSheet("""
-        QMainWindow {
-            background-color: #121212;
-        }
-        QLineEdit {
-            background-color: #1e1e1e;
-            color: white;
-            border-radius: 10px;
-            padding: 15px;
-        }
-        QPushButton {
-            background-color: #1e1e1e;
-            color: white;
-            border-radius: 12px;
-        }
-        QPushButton:hover {
-            background-color: #2a2a2a;
-        }
-        QPushButton:pressed {
-            background-color: #3a3a3a;
-        }
-        QListWidget {
-            background-color: #1e1e1e;
-            color: #cccccc;
-            border-radius: 10px;
-            padding: 8px;
-        }
-        QListWidget::item:selected {
-            background-color: #2a2a2a;
-        }
+            QMainWindow {
+                background-color: #121212;
+            }
+            QLineEdit {
+                background-color: #1e1e1e;
+                color: white;
+                border-radius: 10px;
+                padding: 15px;
+            }
+            QPushButton {
+                background-color: #1e1e1e;
+                color: white;
+                border-radius: 12px;
+            }
+            QPushButton:hover {
+                background-color: #2a2a2a;
+            }
+            QPushButton:pressed {
+                background-color: #3a3a3a;
+            }
+            QListWidget {
+                background-color: #1e1e1e;
+                color: #cccccc;
+                border-radius: 10px;
+                padding: 8px;
+            }
+            QListWidget::item:selected {
+                background-color: #2a2a2a;
+            }
         """)
 
 
